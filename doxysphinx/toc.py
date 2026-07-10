@@ -173,32 +173,40 @@ class DoxygenTocGenerator:
         apply(structural_dummies, self._prepare_structural_dummy)
         apply(structural_dummies, self._create_toc_file_for_structural_dummy)
 
-        # NEW: build modules hierarchy from modules.html (if present)
-        modules_path = source_dir / "modules.html"
-        self._modules_entry: Optional[_MenuEntry] = None
-        if modules_path.exists():
-            self._modules_entry = self._load_modules_tree(modules_path, title="API Reference")
+        # Build API reference hierarchy from topics.html (Doxygen > 1.9.8)
+        # or modules.html (Doxygen <= 1.9.8).
+        self._api_reference_entry: Optional[_MenuEntry] = None
+        for reference_file in ("topics.html", "modules.html"):
+            reference_path = source_dir / reference_file
+            if reference_path.exists():
+                self._api_reference_entry = self._load_api_reference_tree(
+                    reference_path,
+                    title="API Reference",
+                )
+                break
 
         self._menu_lookup: Dict[str, _MenuEntry] = {
             e.docname: e for e in self._flatten_tree(self._menu) if not e.is_leaf
         }
 
-        # NEW: merge modules tree into lookup so group__*.html and modules.html get TOCs
-        if self._modules_entry is not None:
-            for e in self._flatten_tree(self._modules_entry):
+        # Merge the API reference tree into lookup so group pages (group__*.html) and
+        # topics/modules overview pages get TOCs
+        if self._api_reference_entry is not None:
+            for e in self._flatten_tree(self._api_reference_entry):
                 if not e.is_leaf:
                     self._menu_lookup[e.docname] = e
 
 
-    def _load_modules_tree(self, modules_html_path: Path, title: str = "API Reference") -> _MenuEntry:
-            html = modules_html_path.read_text(encoding="utf-8", errors="ignore")
+    def _load_api_reference_tree(self, overview_html_path: Path, title: str = "API Reference") -> _MenuEntry:
+            html = overview_html_path.read_text(encoding="utf-8", errors="ignore")
             matches = list(_ROW_RE.finditer(html))
 
-            # Synthetic root representing modules.html itself
+            # Synthetic root representing topics.html or modules.html itself
+            docname = overview_html_path.stem
             root = _MenuEntry(
                 title=title,
-                docname="modules",
-                url="modules.html",
+                docname=docname,
+                url=overview_html_path.name,
                 children=[],
                 is_structural_dummy=False,
             )
