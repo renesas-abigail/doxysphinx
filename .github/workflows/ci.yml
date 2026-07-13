@@ -12,6 +12,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -21,8 +22,6 @@ on:
 permissions:
   contents: write
 
-
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -31,49 +30,49 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-    - name: "Checkout Code"
-      uses: actions/checkout@v4
-      with:
-        submodules: false
-        fetch-depth: 0
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
 
-    - name: "Ensure Python/Build Environment v${{ matrix.python-version }}"
-      uses: ./.github/actions/init
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: "Ensure Python/Build Environment v${{ matrix.python-version }}"
+        uses: ./.github/actions/init
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: "Run Tests"
-      run: |
-        mkdir -p docs/doxygen
-        poetry run pytest --emoji -v -s --md $GITHUB_STEP_SUMMARY \
-          --cov=doxysphinx --cov-branch --cov-report=term --cov-fail-under=80
+      - name: "Run Tests"
+        run: |
+          mkdir -p docs/doxygen
+          poetry run pytest --emoji -v -s --md $GITHUB_STEP_SUMMARY \
+            --cov=doxysphinx --cov-branch --cov-report=term --cov-fail-under=80
 
   qa:
     runs-on: ubuntu-latest
 
     steps:
-    - name: "Checkout Code"
-      uses: actions/checkout@v4
-      with:
-        submodules: false
-        fetch-depth: 0
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
 
-    - name: "Ensure Python/Build Environment"
-      uses: ./.github/actions/init
-      with:
-        python-version: "3.12"
+      - name: "Ensure Python/Build Environment"
+        uses: ./.github/actions/init
+        with:
+          python-version: "3.12"
 
-    - name: "cache pre-commit"
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pre-commit
-        key: ${{ runner.os }}-py3.12-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-py3.12
+      - name: "cache pre-commit"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-py3.12-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-py3.12
 
-    - name: "Run quality checks"
-      run: |
-        SKIP=poetry-lock poetry run pre-commit run --all-files
+      - name: "Run quality checks"
+        run: |
+          SKIP=poetry-lock poetry run pre-commit run --all-files
 
   release:
     runs-on: ubuntu-latest
@@ -81,36 +80,36 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore(release):')
 
     steps:
-    - name: "Checkout Code"
-      uses: actions/checkout@v4
-      with:
-        submodules: false
-        fetch-depth: 0
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
 
-    - name: "Ensure Python/Build Environment"
-      uses: ./.github/actions/init
-      with:
-        python-version: "3.12"
+      - name: "Ensure Python/Build Environment"
+        uses: ./.github/actions/init
+        with:
+          python-version: "3.12"
 
-    - name: "Update version, changelog"
-      id: versionbump
-      run: |
-        git config user.email "actions@github.com"
-        git config user.name "github-actions"
-        poetry run cz bump --changelog
-        git push
-        git push --tags
-        export VERSION=$(poetry version -s)
-        poetry run cz changelog --dry-run $VERSION
-        poetry run cz changelog --file-name RELEASE_NOTES.md $VERSION
-        echo "::set-output name=new_version_tag::v$VERSION"
-        git switch --detach v$VERSION
-      env:
-        GH_TOKEN: ${{ secrets.GITHUBTOKEN }}
+      - name: "Update version, changelog"
+        id: versionbump
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          poetry run cz bump --changelog
+          git push
+          git push --tags
+          export VERSION=$(poetry version -s)
+          poetry run cz changelog --dry-run $VERSION
+          poetry run cz changelog --file-name RELEASE_NOTES.md $VERSION
+          echo "::set-output name=new_version_tag::v$VERSION"
+          git switch --detach v$VERSION
+        env:
+          GH_TOKEN: ${{ secrets.GITHUBTOKEN }}
 
-    - name: "Create Release (will be filled in cd)"
-      uses: softprops/action-gh-release@v1
-      with:
-        body_path: RELEASE_NOTES.md
-        tag_name: ${{ steps.versionbump.outputs.new_version_tag }}
-        token: ${{ secrets.GITHUBTOKEN }}
+      - name: "Create Release (will be filled in cd)"
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          tag_name: ${{ steps.versionbump.outputs.new_version_tag }}
+          token: ${{ secrets.GITHUBTOKEN }}
