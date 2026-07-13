@@ -33,6 +33,8 @@ jobs:
         # Test with multiple doxygen versions for regression testing
         include:
           - python-version: "3.12"
+            doxygen-version: "1.8.13"
+          - python-version: "3.12"
             doxygen-version: "1.9.8"
           - python-version: "3.12"
             doxygen-version: "1.11.0"

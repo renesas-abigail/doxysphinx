@@ -15,10 +15,11 @@ Resources are stylesheets, images, javascripts etc. that contemplate the html fi
 import hashlib
 import logging
 import pkgutil
+import shutil
+import subprocess  # nosec  # Needed to invoke Dart Sass CLI
+import tempfile
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Protocol, Union
-
-import sass
+from typing import Callable, List, Optional, Protocol, Union
 
 from doxysphinx.sphinx import DirectoryMapper
 
@@ -168,7 +169,7 @@ class DoxygenResourceProvider:
 class CssScoper:
     """Scopes css-stylesheets to a special selector.
 
-    This is done with the help of libsass (as the sass-syntax extends css with nesting).
+    This is done with the help of Dart Sass (as the sass-syntax extends css with nesting).
 
     Our original problem was that the doxygen stylesheet and the sphinx theme stylesheets collide in some
     ways (e.g. global styles like heading-styles etc...). We therefore needed to have a mechanism to apply
@@ -218,41 +219,22 @@ class CssScoper:
         if stylesheet == target:
             raise ApplicationError(f"source ({stylesheet}) and target ({target}) stylesheets cannot be identical.")
 
-        # load stylesheet and apply patches
-        css_content = stylesheet.read_text(encoding="UTF-8")
+        # Prepare SCSS content (load stylesheet, apply patches, scope, add custom rules)
+        scss_content = self._prepare_scss_content(stylesheet, additional_css_rules, content_patch_callback)
 
-        if content_patch_callback:
-            css_content = content_patch_callback(css_content)
-
-        # create .scss (sass) content scoped to the selector
-        content = f"{self._selector} {{\n{css_content}\n}}\n"  # here we scope the content to a given css selector
-
-        if additional_css_rules:
-            content += additional_css_rules
-
-        new_hash_digest = hashlib.blake2b(content.encode("utf-8")).hexdigest()
-
-        old_hash_digest = self._read_hash_digest(target)
-        if new_hash_digest == old_hash_digest:
+        # Check if recompilation is needed by comparing hash with existing target
+        new_hash_digest = hashlib.blake2b(scss_content.encode("utf-8")).hexdigest()
+        if self._is_cached(target, new_hash_digest):
             return None
 
         # add hash digest to content
-        content = (
-            f"/* {new_hash_digest} <- doxysphinx hash digest for the original input css that leads"
-            f"to the css below */\n{content}"
-        )
+        scss_with_hash = self._add_hash_comment(scss_content, new_hash_digest)
 
         # compile the scss to a css
-        compiled_css: Any = sass.compile(
-            string=content,
-            output_style="expanded",
-            indented=False,
-            include_paths=[str(stylesheet.parent)],
-        )
-
+        compiled_css = self._compile_scss_with_dart_sass(scss_with_hash)
         # the sass compiler does also scope the html element (where typically css variables are
         # stored). We need to remove that scoping again because it will only work if it's in global scope.
-        compiled_css = compiled_css.replace(f"{self._selector} html {{", "html {")
+        compiled_css = self._unscope_html_element(compiled_css)
 
         # write stylesheet
         target.write_text(compiled_css, encoding="UTF-8")
@@ -261,6 +243,98 @@ class CssScoper:
             f"scoped original stylesheet '{stylesheet}' to selector '{self._selector}' in target '{target}'."
         )
         return target
+
+    def _prepare_scss_content(
+        self,
+        stylesheet: Path,
+        additional_css_rules: Optional[str],
+        content_patch_callback: Optional[Callable[[str], str]],
+    ) -> str:
+        """Load CSS file, apply patches, wrap in selector scope, and add custom rules.
+
+        :param stylesheet: The CSS file to load.
+        :param additional_css_rules: Optional additional SCSS rules to append.
+        :param content_patch_callback: Optional callback to patch CSS content before scoping.
+        :return: The SCSS content for compilation.
+        """
+        # Load and optionally patch CSS content
+        css_content = stylesheet.read_text(encoding="UTF-8")
+        if content_patch_callback:
+            css_content = content_patch_callback(css_content)
+
+        # Wrap CSS in selector scope to create SCSS
+        scss_content = f"{self._selector} {{\n{css_content}\n}}\n"
+
+        # Add any custom SCSS rules
+        if additional_css_rules:
+            scss_content += additional_css_rules
+
+        return scss_content
+
+    def _is_cached(self, target: Path, new_hash: str) -> bool:
+        """Check if target file exists with matching hash. In this case there is no need for recompilation.
+
+        :param target: The target CSS file.
+        :param new_hash: The hash of the new SCSS content.
+        :return: True if target is up-to-date, False otherwise.
+        """
+        old_hash = self._read_hash_digest(target)
+        return old_hash == new_hash
+
+    @staticmethod
+    def _add_hash_comment(scss_content: str, hash_digest: str) -> str:
+        """Add hash digest comment to SCSS content for cache tracking.
+
+        :param scss_content: The SCSS content.
+        :param hash_digest: The hash digest to include.
+        :return: SCSS content with hash comment prepended.
+        """
+        return (
+            f"/* {hash_digest} <- doxysphinx hash digest for the original input css that leads"
+            f"to the css below */\n{scss_content}"
+        )
+
+    @staticmethod
+    def _compile_scss_with_dart_sass(scss_content: str) -> str:
+        """Compile SCSS content to CSS using Dart Sass CLI.
+
+        :param scss_content: The SCSS content to compile.
+        :return: The compiled CSS output.
+        :raises ApplicationError: If Dart Sass is not found or compilation fails.
+        """
+        sass_cmd = shutil.which("sass")
+        if not sass_cmd:
+            raise ApplicationError("Dart Sass CLI not found. Please install it from https://sass-lang.com/install")
+
+        # Write SCSS to temporary file (Dart Sass CLI requires file input)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".scss", delete=False, encoding="utf-8") as tmp_file:
+            tmp_file.write(scss_content)
+            tmp_path = tmp_file.name
+
+        try:
+            # Run Dart Sass compilation
+            result = subprocess.run(  # nosec  # sass_cmd is validated via shutil.which()
+                [sass_cmd, "--style=expanded", "--no-source-map", tmp_path],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            raise ApplicationError(f"Dart Sass compilation failed: {e.stderr}") from e
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def _unscope_html_element(self, css: str) -> str:
+        """Remove selector scoping from html element declarations.
+
+        The Sass compiler scopes the html element too, but CSS variables defined on html
+        must remain in global scope to work correctly.
+
+        :param css: The compiled CSS.
+        :return: CSS with html element unscoped.
+        """
+        return css.replace(f"{self._selector} html {{", "html {")
 
     @staticmethod
     def _read_hash_digest(file: Path) -> str:
@@ -280,9 +354,3 @@ class CssScoper:
 
         digest = digest_line[3:].split(" <- ")[0]
         return digest
-
-    @staticmethod
-    def _move(original: Path, new: Path):
-        if new.exists():
-            new.unlink()
-        original.rename(new)

@@ -13,6 +13,14 @@
 
 <!--next-version-placeholder-->
 
+## Unreleased
+
+### Changed
+
+- **CSS compilation**: Migrated from deprecated libsass Python binding to Dart Sass CLI for CSS scoping. This enables support for modern CSS syntax used in Doxygen 1.15.0+.
+  - Removes `libsass` dependency from pyproject.toml
+  - Updated Dockerfile to use Dart Sass 1.101.0 (previously 1.49.7)
+
 ## v3.3.14 (2025-10-13)
 
 ### Fix

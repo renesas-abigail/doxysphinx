@@ -27,7 +27,7 @@ ENV PATH="/home/vscode/.local/bin:${PATH}"
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install dart-sass (needed for scoping css files to specific html elements)
-RUN curl -sSL https://github.com/sass/dart-sass/releases/download/1.49.7/dart-sass-1.49.7-linux-x64.tar.gz | \
+RUN curl -sSL https://github.com/sass/dart-sass/releases/download/1.101.0/dart-sass-1.101.0-linux-x64.tar.gz | \
     tar -xzvf - --strip-components=1 -C /home/vscode/.local/bin dart-sass/sass
 
 COPY dist/*.whl /app
