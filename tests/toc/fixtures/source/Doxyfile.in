@@ -1,0 +1,11 @@
+PROJECT_NAME           = "TestProject"
+PROJECT_NUMBER         = "1.0"
+OUTPUT_DIRECTORY       = @OUTPUT_DIR@
+INPUT                  = @INPUT_DIR@
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+EXTRACT_ALL            = YES
+RECURSIVE              = NO

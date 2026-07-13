@@ -32,28 +32,22 @@ runs:
       run: |
         set -euo pipefail
         sudo apt-get update
+
+        # install deps
         sudo apt-get install graphviz curl tar -y
-        doxygen_version="${{ inputs.doxygen-version }}"
-        if [[ "$doxygen_version" == "apt" ]]; then
-          sudo apt-get install doxygen -y
+
+        # install doxygen
+        bash "${GITHUB_WORKSPACE}/tests/toc/fixtures/install_doxygen.sh" "${{ inputs.doxygen-version }}"
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+        # verify
+        if [[ "${{ inputs.doxygen-version }}" == "apt" ]]; then
           installed_version="$(doxygen --version)"
         else
-          mkdir -p "$HOME/.local/bin"
-          version_tag="Release_$(echo ${doxygen_version} | tr '.' '_')"
-
-          echo "=== Extracting doxygen ${doxygen_version} ==="
-          curl -sSLf "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
-            tar -xzvf - --strip-components=2 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
-
-          echo "=== Contents of $HOME/.local/bin ==="
-          ls -la "$HOME/.local/bin/"
-
           installed_version="$("$HOME/.local/bin/doxygen" --version)"
-          if [[ "$installed_version" != "$doxygen_version"* ]]; then
-            echo "Expected doxygen version ${doxygen_version}, but found ${installed_version}."
-            exit 1
-          fi
         fi
+
         echo "Installed doxygen version: $installed_version"
       shell: bash
 
