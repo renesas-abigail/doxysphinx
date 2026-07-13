@@ -12,6 +12,8 @@
 name: CI
 
 on:
+  # TODO: Remove, just for testing
+  workflow_dispatch:
   push:
     branches:
       - main

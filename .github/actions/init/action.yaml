@@ -40,8 +40,9 @@ runs:
           sudo apt-get install doxygen -y
         else
           mkdir -p "$HOME/.local/bin"
-          curl -sSL "https://www.doxygen.nl/files/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
-            tar -xzf - --strip-components=1 -C "$HOME/.local/bin" bin/doxygen
+          version_tag="Release_$(echo ${doxygen_version} | tr '.' '_')"
+          curl -sSLf "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
+            tar -xzf - --strip-components=1 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         fi
 
