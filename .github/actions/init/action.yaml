@@ -28,7 +28,7 @@ runs:
   using: "composite"
   steps:
     - name: "Ensure doxygen"
-      if: inputs.doc-tools
+      if: ${{ inputs.doc-tools == 'true' }}
       run: |
         set -euo pipefail
 
@@ -36,22 +36,26 @@ runs:
         sudo apt-get install graphviz curl tar -y
 
         doxygen_version="${{ inputs.doxygen-version }}"
+
         if [[ "$doxygen_version" == "apt" ]]; then
           sudo apt-get install doxygen -y
+          installed_version="$(doxygen --version)"
         else
           mkdir -p "$HOME/.local/bin"
           version_tag="Release_$(echo ${doxygen_version} | tr '.' '_')"
+
           curl -sSLf "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
             tar -xzf - --strip-components=1 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        fi
 
-        installed_version="$(doxygen --version)"
-        echo "Installed doxygen version: $installed_version"
-        if [[ "$doxygen_version" != "apt" && "$installed_version" != "$doxygen_version"* ]]; then
-          echo "Expected doxygen version ${doxygen_version}, but found ${installed_version}."
-          exit 1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+          installed_version="$("$HOME/.local/bin/doxygen" --version)"
+          if [[ "$installed_version" != "$doxygen_version"* ]]; then
+            echo "Expected doxygen version ${doxygen_version}, but found ${installed_version}."
+            exit 1
+          fi
         fi
+        echo "Installed doxygen version: $installed_version"
       shell: bash
 
     - name: "Ensure poetry"
