@@ -43,7 +43,7 @@ runs:
 
           echo "=== Extracting doxygen ${doxygen_version} ==="
           curl -sSLf "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
-            tar -xzvf - --strip-components=1 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
+            tar -xzvf - --strip-components=2 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
 
           echo "=== Contents of $HOME/.local/bin ==="
           ls -la "$HOME/.local/bin/"
