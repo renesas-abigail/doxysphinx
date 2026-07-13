@@ -63,7 +63,9 @@ runs:
 
     - name: "Ensure dart-sass"
       run: |
-        sudo apt-get install -y sass
+        curl -sSL https://github.com/sass/dart-sass/releases/download/1.101.0/dart-sass-1.101.0-linux-x64.tar.gz | \
+          sudo tar -xz -C /usr/local
+        sudo ln -sf /usr/local/dart-sass/sass /usr/local/bin/sass
         sass --version
       shell: bash
 
