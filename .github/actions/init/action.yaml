@@ -31,12 +31,9 @@ runs:
       if: ${{ inputs.doc-tools == 'true' }}
       run: |
         set -euo pipefail
-
         sudo apt-get update
         sudo apt-get install graphviz curl tar -y
-
         doxygen_version="${{ inputs.doxygen-version }}"
-
         if [[ "$doxygen_version" == "apt" ]]; then
           sudo apt-get install doxygen -y
           installed_version="$(doxygen --version)"
@@ -44,10 +41,12 @@ runs:
           mkdir -p "$HOME/.local/bin"
           version_tag="Release_$(echo ${doxygen_version} | tr '.' '_')"
 
+          echo "=== Extracting doxygen ${doxygen_version} ==="
           curl -sSLf "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
-            tar -xzf - --strip-components=1 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
+            tar -xzvf - --strip-components=1 -C "$HOME/.local/bin" "doxygen-${doxygen_version}/bin/doxygen"
 
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "=== Contents of $HOME/.local/bin ==="
+          ls -la "$HOME/.local/bin/"
 
           installed_version="$("$HOME/.local/bin/doxygen" --version)"
           if [[ "$installed_version" != "$doxygen_version"* ]]; then
