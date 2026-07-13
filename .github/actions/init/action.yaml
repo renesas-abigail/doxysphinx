@@ -16,6 +16,10 @@ inputs:
     description: "The version of python to use (default: 3.9)"
     required: true
     default: 3.9
+  doxygen-version:
+    description: "The version of Doxygen to use. 'apt' for distro package or version number like 1.9.8"
+    required: true
+    default: apt
   doc-tools:
     description: "Whether to install the documentation tools (doxygen)"
     required: true
@@ -23,31 +27,42 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: "Ensure doxygen"
-    if: inputs.doc-tools
-    run: sudo apt-get install graphviz doxygen -y
-    # latest doxygen (untested)
-    # run: |
-    #  if ! command -v doxygen &> /dev/null
-    #  then
-    #    echo "doxygen wasn't found... installing now..."
-    #    mkdir -p ~/.local/bin
-    #    curl -sSL https://www.doxygen.nl/files/doxygen-1.9.4.linux.bin.tar.gz | \
-    #    tar -xzvf - --strip-components=1 -C ~/.local/bin bin/doxygen;
-    #  fi
+    - name: "Ensure doxygen"
+      if: inputs.doc-tools
+      run: |
+        set -euo pipefail
 
-    shell: bash
+        sudo apt-get update
+        sudo apt-get install graphviz curl tar -y
 
-  - name: "Ensure poetry"
-    run: pipx install poetry
-    shell: bash
+        doxygen_version="${{ inputs.doxygen-version }}"
+        if [[ "$doxygen_version" == "apt" ]]; then
+          sudo apt-get install doxygen -y
+        else
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL "https://www.doxygen.nl/files/doxygen-${doxygen_version}.linux.bin.tar.gz" | \
+            tar -xzf - --strip-components=1 -C "$HOME/.local/bin" bin/doxygen
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        fi
 
-  - name: "Ensure python (with poetry caching)"
-    uses: actions/setup-python@v5
-    with:
-      python-version: ${{ inputs.python-version }}
-      cache: 'poetry'
+        installed_version="$(doxygen --version)"
+        echo "Installed doxygen version: $installed_version"
+        if [[ "$doxygen_version" != "apt" && "$installed_version" != "$doxygen_version"* ]]; then
+          echo "Expected doxygen version ${doxygen_version}, but found ${installed_version}."
+          exit 1
+        fi
+      shell: bash
 
-  - name: "Install dependencies"
-    run: poetry install --with=ci
-    shell: bash
+    - name: "Ensure poetry"
+      run: pipx install poetry
+      shell: bash
+
+    - name: "Ensure python (with poetry caching)"
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: "poetry"
+
+    - name: "Install dependencies"
+      run: poetry install --with=ci
+      shell: bash
