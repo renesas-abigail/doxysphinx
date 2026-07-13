@@ -65,6 +65,7 @@ runs:
       run: |
         sudo apt-get install -y sass
         sass --version
+      shell: bash
 
     - name: "Install dependencies"
       run: poetry install --with=ci
